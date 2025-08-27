@@ -12,19 +12,36 @@ export default function WanderAuth() {
       button: false,
     });
     wanderRef.current = wander;
+    try {
+      console.log("[Wander] init", {
+        href: typeof window !== "undefined" ? window.location?.href : "n/a",
+        ua: typeof navigator !== "undefined" ? navigator.userAgent : "n/a",
+      });
+    } catch {}
 
     // Expose opener on window for imperative usage
     (window as any).__wanderOpen = () => {
+      console.log("[Wander] open/connect requested");
       try {
         if (typeof wander.open === "function") {
+          console.log("[Wander] calling wander.open()");
           wander.open();
         } else if (typeof wander.connect === "function") {
+          console.log("[Wander] calling wander.connect()");
           wander.connect();
         }
       } catch {}
     };
 
-    const handleWalletLoaded = () => {};
+    const handleWalletLoaded = () => {
+      try {
+        const w = (window as any).arweaveWallet;
+        console.log("[Wander] arweaveWalletLoaded", {
+          hasWallet: Boolean(w),
+          keys: w ? Object.keys(w) : [],
+        });
+      } catch {}
+    };
     window.addEventListener("arweaveWalletLoaded", handleWalletLoaded);
 
     // Full connect+permission+upload pipeline exposed for Astro to call
@@ -40,6 +57,15 @@ export default function WanderAuth() {
       ) as HTMLElement | null;
       try {
         console.log("[Wander] flow start");
+        try {
+          console.log("[Wander] env", {
+            href: window.location?.href,
+            origin: window.location?.origin,
+            hostname: window.location?.hostname,
+            userAgent: navigator.userAgent,
+            hasWallet: Boolean((window as any).arweaveWallet),
+          });
+        } catch {}
         if (statusEl) statusEl.textContent = "Connecting...";
         spinnerEl?.classList.remove("hidden");
         checkEl?.classList.add("hidden");
@@ -65,16 +91,28 @@ export default function WanderAuth() {
         const waitForActiveAddress = async (timeoutMs = 90000) =>
           new Promise<string>((resolve, reject) => {
             const start = Date.now();
+            let attempts = 0;
             const tick = async () => {
               try {
                 const addr = await (
                   window as any
                 ).arweaveWallet?.getActiveAddress?.();
-                if (addr && typeof addr === "string") return resolve(addr);
+                attempts += 1;
+                if (addr && typeof addr === "string") {
+                  console.log("[Wander] active address ready", {
+                    addr,
+                    attempts,
+                  });
+                  return resolve(addr);
+                }
               } catch {
                 // ignore
               }
               if (Date.now() - start > timeoutMs) {
+                console.warn("[Wander] waitForActiveAddress timeout", {
+                  attempts,
+                  waitedMs: Date.now() - start,
+                });
                 return reject(
                   new Error("Wallet is initializing. Please try again shortly.")
                 );
@@ -89,7 +127,7 @@ export default function WanderAuth() {
 
         // Request permissions per docs
         try {
-          console.log("requesting permissions...");
+          console.log("[Wander] requesting permissions...");
           const required = [
             "ACCESS_ADDRESS",
             "ACCESS_PUBLIC_KEY",
@@ -99,6 +137,7 @@ export default function WanderAuth() {
           const existing =
             (await (window as any).arweaveWallet.getPermissions?.()) || [];
           const need = required.filter((p: string) => !existing.includes(p));
+          console.log("[Wander] permissions", { existing, need });
           if (need.length > 0) {
             await (window as any).arweaveWallet.connect(need as any, {
               name: "Arweave.org Uploader",
@@ -124,6 +163,11 @@ export default function WanderAuth() {
 
         const file: File | undefined = (window as any).__selectedFile;
         if (!file) throw new Error("No file selected");
+        console.log("[Wander] using file", {
+          name: file?.name,
+          size: file?.size,
+          type: file?.type,
+        });
 
         const { default: Arweave } = await import("arweave");
         const arweave = Arweave.init({});
@@ -134,8 +178,10 @@ export default function WanderAuth() {
         }
         try {
           if ((arweave as any).transactions?.sign) {
+            console.log("[Wander] signing via arweave-js transactions.sign");
             await (arweave as any).transactions.sign(tx);
           } else if ((window as any).arweaveWallet?.sign) {
+            console.log("[Wander] signing via injected wallet sign");
             await (window as any).arweaveWallet.sign(tx);
           } else {
             throw new Error("No signing method available");
@@ -164,6 +210,10 @@ export default function WanderAuth() {
         if (!isSigned) {
           throw new Error("Transaction is not signed");
         }
+        console.log("[Wander] tx signed", {
+          id: (tx as any).id,
+          dataSize: (tx as any).data_size,
+        });
 
         // Prefer wallet.dispatch for sponsored FREE_TRIAL flows
         let dispatched = false;
@@ -171,6 +221,7 @@ export default function WanderAuth() {
           if ((window as any).arweaveWallet?.dispatch) {
             if (statusEl) statusEl.textContent = "Dispatching...";
             const res = await (window as any).arweaveWallet.dispatch(tx);
+            console.log("[Wander] dispatch result", res);
             if (res && res.id) {
               (tx as any).id = res.id;
               dispatched = true;
@@ -189,9 +240,18 @@ export default function WanderAuth() {
               await uploader.uploadChunk();
               const pct = Math.round(uploader.pctComplete * 100) / 100;
               if (statusEl) statusEl.textContent = `Uploading... ${pct}%`;
+              if (pct % 10 === 0) {
+                console.log("[Wander] upload progress", { pct });
+              }
             }
+            console.log("[Wander] chunked upload complete");
           } catch (err) {
+            console.warn(
+              "[Wander] chunked upload failed; falling back to POST",
+              err
+            );
             const res = await arweave.transactions.post(tx);
+            console.log("[Wander] POST upload status", res?.status);
             if (!res?.status || res.status < 200 || res.status >= 300) {
               throw new Error("POST upload failed");
             }
@@ -224,12 +284,37 @@ export default function WanderAuth() {
         } catch {}
         console.log("[Wander] uploaded", txId);
       } catch (e: any) {
-        console.error("[Wander] failed", e);
+        try {
+          console.error("[Wander] failed", {
+            name: e?.name,
+            message: e?.message,
+            stack: e?.stack,
+            cause: e?.cause,
+          });
+        } catch {
+          console.error("[Wander] failed", e);
+        }
         if (statusEl) statusEl.textContent = e?.message || "Upload failed";
         spinnerEl?.classList.add("hidden");
         checkEl?.classList.add("hidden");
       }
     };
+
+    // Global diagnostic handlers (no-op if already set)
+    try {
+      if (!(window as any).__wanderGlobalErrHandlers) {
+        window.addEventListener("error", (ev) => {
+          console.error(
+            "[Global] window.onerror",
+            ev?.error || ev?.message || ev
+          );
+        });
+        window.addEventListener("unhandledrejection", (ev: any) => {
+          console.error("[Global] unhandledrejection", ev?.reason || ev);
+        });
+        (window as any).__wanderGlobalErrHandlers = true;
+      }
+    } catch {}
 
     return () => {
       try {
