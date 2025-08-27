@@ -96,25 +96,7 @@ import storeIcon from "../images/icons/store-icon.svg";
 
       <WalletDownloadModal />
 
-      <!-- Diagnostics: floating toggle button -->
-      <button id="diag-toggle" type="button" class="fixed top-4 right-8 z-[9999] rounded-md bg-black text-white px-3 py-2 text-xs font-mono opacity-70 hover:opacity-100 transition-opacity duration-150 ease-out-cubic">
-        Debug
-      </button>
-
-      <!-- Diagnostics: panel -->
-      <div id="diag-panel" class="fixed top-16 right-8 z-[9999] w-[380px] max-w-[92vw] bg-white text-black border border-gray-200 shadow-xl hidden">
-        <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200">
-          <div class="text-xs font-mono">Diagnostics</div>
-          <div class="flex items-center gap-2">
-            <button id="diag-copy" class="text-xs font-mono text-blue-600 hover:underline">Copy</button>
-            <button id="diag-clear" class="text-xs font-mono text-red-600 hover:underline">Clear</button>
-            <button id="diag-close" class="text-xs font-mono text-gray-600 hover:underline">Close</button>
-          </div>
-        </div>
-        <div class="p-2 h-[240px] overflow-auto">
-          <pre id="diag-log" class="text-[10px] leading-[1.4] font-mono whitespace-pre-wrap break-words"></pre>
-        </div>
-      </div>
+      
 
 </section>
     <!-- Next Section: Tutorial and Resources -->
@@ -229,7 +211,7 @@ import storeIcon from "../images/icons/store-icon.svg";
           });
         } catch {}
 
-        // Global diagnostics (idempotent)
+        // Global error handlers (kept minimal)
         try {
           if (!(window).__useGlobalErrHandlers) {
             window.addEventListener('error', (ev) => {
@@ -247,133 +229,7 @@ import storeIcon from "../images/icons/store-icon.svg";
         const step2Btn = document.querySelector('[data-step-tab="2"]');
         (window as any).__txReady = false;
 
-        // Diagnostics panel wiring
-        const diagToggle = document.getElementById('diag-toggle');
-        const diagPanel = document.getElementById('diag-panel');
-        const diagClose = document.getElementById('diag-close');
-        const diagCopy = document.getElementById('diag-copy');
-        const diagClear = document.getElementById('diag-clear');
-        const diagLogEl = document.getElementById('diag-log');
-        const diagState = { open: false, paused: false } as any;
-        ;(window as any).__diagBuffer = (window as any).__diagBuffer || [];
-
-        function ts() {
-          const d = new Date();
-          return (
-            d.getHours().toString().padStart(2, '0') + ':' +
-            d.getMinutes().toString().padStart(2, '0') + ':' +
-            d.getSeconds().toString().padStart(2, '0') + '.' +
-            d.getMilliseconds().toString().padStart(3, '0')
-          );
-        }
-        function normalizeArg(arg) {
-          try {
-            if (arg instanceof Error) {
-              return `Error: ${arg.message}`;
-            }
-            if (typeof arg === 'object') {
-              return JSON.stringify(arg);
-            }
-            return String(arg);
-          } catch {
-            try { return String(arg); } catch { return '[unserializable]'; }
-          }
-        }
-        function shouldCapture(level, args) {
-          try {
-            if (level === 'error' || level === 'warn') return true;
-            const first = args?.[0];
-            if (typeof first === 'string') {
-              return /\[(Wander|Use|Global)\]/.test(first);
-            }
-          } catch {}
-          return false;
-        }
-        function pushLog(level, args) {
-          try {
-            const parts = Array.from(args).map(normalizeArg);
-            const humanLevel = level.toUpperCase();
-            const first = parts[0] || '';
-            // Derive source tag
-            let source = 'App';
-            const m = typeof first === 'string' ? first.match(/\[(Wander|Use|Global)\]/) : null;
-            if (m) source = m[1];
-            const title = typeof first === 'string' ? first.replace(/\[(Wander|Use|Global)\]\s*/, '') : String(first);
-            const rest = parts.slice(1);
-            const line = `${ts()} • ${source} • ${humanLevel} • ${title}${rest.length ? ' • ' + rest.join(' ') : ''}`;
-            (window as any).__diagBuffer.push(line);
-            if ((window as any).__diagBuffer.length > 500) {
-              (window as any).__diagBuffer.splice(0, (window as any).__diagBuffer.length - 500);
-            }
-            if (diagLogEl) {
-              diagLogEl.textContent = (window as any).__diagBuffer.join('\n');
-              // Auto scroll to bottom when open
-              if (diagPanel && !diagPanel.classList.contains('hidden')) {
-                diagLogEl.parentElement?.scrollTo(0, diagLogEl.parentElement.scrollHeight);
-              }
-            }
-          } catch {}
-        }
-
-        try {
-          const orig = {
-            log: console.log.bind(console),
-            warn: console.warn.bind(console),
-            error: console.error.bind(console),
-          };
-          console.log = (...a) => {
-            try { if (shouldCapture('log', a)) pushLog('log', a); } catch {}
-            orig.log(...a);
-          };
-          console.warn = (...a) => {
-            try { pushLog('warn', a); } catch {}
-            orig.warn(...a);
-          };
-          console.error = (...a) => {
-            try {
-              // If an Error is present, rewrite to plain-English summary
-              const err = a.find((x) => x instanceof Error) as any;
-              if (err) {
-                const summary = `Error: ${err.message}`;
-                const rest = a.filter((x) => x !== err);
-                pushLog('error', [summary, ...rest]);
-              } else {
-                pushLog('error', a);
-              }
-            } catch {}
-            orig.error(...a);
-          };
-        } catch {}
-
-        function openDiag() {
-          if (!diagPanel) return;
-          diagPanel.classList.remove('hidden');
-          diagState.open = true;
-        }
-        function closeDiag() {
-          if (!diagPanel) return;
-          diagPanel.classList.add('hidden');
-          diagState.open = false;
-        }
-        diagToggle?.addEventListener('click', () => {
-          if (diagState.open) closeDiag(); else openDiag();
-        });
-        diagClose?.addEventListener('click', closeDiag);
-        diagCopy?.addEventListener('click', async () => {
-          try {
-            const text = ((window as any).__diagBuffer || []).join('\n');
-            await navigator.clipboard.writeText(text);
-            console.log('[Use] Diagnostics copied to clipboard');
-          } catch (e) {
-            console.error('[Use] Copy failed', e);
-          }
-        });
-        diagClear?.addEventListener('click', () => {
-          try {
-            (window as any).__diagBuffer = [];
-            if (diagLogEl) diagLogEl.textContent = '';
-          } catch {}
-        });
+        // Diagnostics removed
 
         function setStep2Enabled(enabled) {
           if (!step2Btn) return;
