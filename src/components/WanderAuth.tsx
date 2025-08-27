@@ -9,7 +9,7 @@ export default function WanderAuth() {
       clientId: "FREE_TRIAL",
       ui: { launcher: false },
       showLauncher: false,
-      button: false,
+      button: true,
     });
     wanderRef.current = wander;
     try {
