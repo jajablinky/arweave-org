@@ -76,7 +76,7 @@ export default function WanderAuth() {
         spinnerEl?.classList.remove("hidden");
         storeIconEl?.classList.add("hidden");
         checkEl?.classList.add("hidden");
-
+        console.log("before wallet connecting", (window as any).arweaveWallet);
         // Prefer direct connect over opening UI to reduce popup/cookie issues on deploy
         try {
           if (!(window as any).arweaveWallet && wanderRef.current?.connect) {
