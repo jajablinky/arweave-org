@@ -30,7 +30,9 @@ export default function WanderAuth() {
           console.log("[Wander] calling wander.connect()");
           wander.connect();
         }
-      } catch {}
+      } catch {
+        console.error("Open / connect", Error);
+      }
     };
 
     const handleWalletLoaded = () => {
@@ -79,6 +81,7 @@ export default function WanderAuth() {
 
         // Subscribe to wallet events for extra visibility (if available)
         try {
+          console.log("subscribing.. flow");
           const wallet: any = (window as any).arweaveWallet;
           const ev: any = wallet?.events;
           const subscribe = ev?.subscribe?.bind(ev) || ev?.on?.bind(ev);
