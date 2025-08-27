@@ -89,25 +89,25 @@ export default function WanderAuth() {
 
         // Subscribe to wallet events for extra visibility (if available)
         try {
+          console.log("subscribing.. flow");
           const wallet: any = (window as any).arweaveWallet;
           const ev: any = wallet?.events;
           const subscribe = ev?.subscribe?.bind(ev) || ev?.on?.bind(ev);
-          console.log("subscribing.. flow");
-          subscribe("connect", (p: any) =>
-            console.log("[Wander] event: connect", p)
-          );
-          subscribe("disconnect", (p: any) =>
-            console.log("[Wander] event: disconnect", p)
-          );
-          subscribe("activeAddress", (p: any) =>
-            console.log("[Wander] event: activeAddress", p)
-          );
-          subscribe("permissions", (p: any) =>
-            console.log("[Wander] event: permissions", p)
-          );
-        } catch {
-          console.error("subscribing.. flow", Error);
-        }
+          if (typeof subscribe === "function") {
+            subscribe("connect", (p: any) =>
+              console.log("[Wander] event: connect", p)
+            );
+            subscribe("disconnect", (p: any) =>
+              console.log("[Wander] event: disconnect", p)
+            );
+            subscribe("activeAddress", (p: any) =>
+              console.log("[Wander] event: activeAddress", p)
+            );
+            subscribe("permissions", (p: any) =>
+              console.log("[Wander] event: permissions", p)
+            );
+          }
+        } catch {}
 
         // Show a helpful hint if no progress within 15s (common deploy blockers)
         let __progress = false;
@@ -200,11 +200,9 @@ export default function WanderAuth() {
           } catch {}
         }, 15000);
 
-        if (statusEl) statusEl.textContent = "Setting up wallet...";
-        await waitForActiveAddress();
-
-        // Request permissions per docs
+        // Request permissions first (do NOT call getActiveAddress before permission)
         try {
+          if (statusEl) statusEl.textContent = "Requesting permissions...";
           console.log("[Wander] requesting permissions...");
           const required = [
             "ACCESS_ADDRESS",
@@ -220,13 +218,16 @@ export default function WanderAuth() {
             await (window as any).arweaveWallet.connect(need as any, {
               name: "Arweave.org Uploader",
             });
-          } else {
           }
           console.log("[Wander] perms ok");
         } catch (permErr) {
           console.error("[Wander] perm error", permErr);
           throw permErr;
         }
+
+        // Now ensure an active address exists (should succeed post-permission)
+        if (statusEl) statusEl.textContent = "Setting up wallet...";
+        await waitForActiveAddress();
 
         // Close modal early so user returns to page
         // Try to close the Wander widget/panel as well
