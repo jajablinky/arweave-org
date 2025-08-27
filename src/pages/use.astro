@@ -48,8 +48,9 @@ import storeIcon from "../images/icons/store-icon.svg";
 
           <!-- Dropzone -->
           <div id="dropzone" class="group mt-8  w-full border-2 border-dashed border-black h-full items-center justify-center text-center cursor-pointer hover:border-orange transition duration-200 ease-out-cubic flex flex-col transform will-change-transform">
-            <div class="text-orange p-8 border-dashed border-2 border-black transition-colors duration-150 ease group-hover:border-orange">
-              <Image src={storeIcon} alt="Upload" class="w-16 h-16 inline-block align-middle" />
+            <div class="text-orange p-8 border-dashed border-2 border-black transition-colors duration-150 ease group-hover:border-orange relative">
+              <Image src={storeIcon} alt="Upload" class="w-16 h-16 inline-block align-middle" id="store-icon" />
+              <div id="upload-spinner" class="hidden absolute inset-0 m-auto w-16 h-16 rounded-full border-2 border-gray-300 border-t-black animate-spin"></div>
             </div>
             <div class="mt-4 font-mono">Drag and Drop</div>
             <div class="text-secondaryLight2 text-p3">Under &lt;100KB</div>
@@ -57,9 +58,6 @@ import storeIcon from "../images/icons/store-icon.svg";
               or <button type="button" class="underline group-hover:text-orange group-active:scale-95 transition-transform duration-150 ease" id="choose-file-btn">choose file</button> to upload
             </div>
             <div id="selected-file-name" class="mt-2 text-p3"></div>
-            <div class="mt-4 flex items-center justify-center">
-              <div id="upload-spinner" class="hidden h-10 w-10 rounded-full border-2 border-gray-300 border-t-black animate-spin"></div>
-            </div>
             <div id="selected-file-error" class="mt-2 text-sm text-red-600 hidden"></div>
             <input id="file-input" type="file" class="hidden" />
           </div>
@@ -99,12 +97,12 @@ import storeIcon from "../images/icons/store-icon.svg";
       <WalletDownloadModal />
 
       <!-- Diagnostics: floating toggle button -->
-      <button id="diag-toggle" type="button" class="fixed bottom-4 right-4 z-[9999] rounded-md bg-black text-white px-3 py-2 text-xs font-mono opacity-70 hover:opacity-100 transition-opacity duration-150 ease-out-cubic">
+      <button id="diag-toggle" type="button" class="fixed top-4 right-8 z-[9999] rounded-md bg-black text-white px-3 py-2 text-xs font-mono opacity-70 hover:opacity-100 transition-opacity duration-150 ease-out-cubic">
         Debug
       </button>
 
       <!-- Diagnostics: panel -->
-      <div id="diag-panel" class="fixed bottom-16 right-4 z-[9999] w-[380px] max-w-[92vw] bg-white text-black border border-gray-200 shadow-xl hidden">
+      <div id="diag-panel" class="fixed top-16 right-8 z-[9999] w-[380px] max-w-[92vw] bg-white text-black border border-gray-200 shadow-xl hidden">
         <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200">
           <div class="text-xs font-mono">Diagnostics</div>
           <div class="flex items-center gap-2">
@@ -271,9 +269,11 @@ import storeIcon from "../images/icons/store-icon.svg";
         function normalizeArg(arg) {
           try {
             if (arg instanceof Error) {
-              return { name: arg.name, message: arg.message, stack: arg.stack };
+              return `Error: ${arg.message}`;
             }
-            if (typeof arg === 'object') return JSON.stringify(arg);
+            if (typeof arg === 'object') {
+              return JSON.stringify(arg);
+            }
             return String(arg);
           } catch {
             try { return String(arg); } catch { return '[unserializable]'; }
@@ -292,7 +292,15 @@ import storeIcon from "../images/icons/store-icon.svg";
         function pushLog(level, args) {
           try {
             const parts = Array.from(args).map(normalizeArg);
-            const line = `[${ts()}] [${level.toUpperCase()}] ${parts.join(' ')}`;
+            const humanLevel = level.toUpperCase();
+            const first = parts[0] || '';
+            // Derive source tag
+            let source = 'App';
+            const m = typeof first === 'string' ? first.match(/\[(Wander|Use|Global)\]/) : null;
+            if (m) source = m[1];
+            const title = typeof first === 'string' ? first.replace(/\[(Wander|Use|Global)\]\s*/, '') : String(first);
+            const rest = parts.slice(1);
+            const line = `${ts()} • ${source} • ${humanLevel} • ${title}${rest.length ? ' • ' + rest.join(' ') : ''}`;
             (window as any).__diagBuffer.push(line);
             if ((window as any).__diagBuffer.length > 500) {
               (window as any).__diagBuffer.splice(0, (window as any).__diagBuffer.length - 500);
@@ -322,7 +330,17 @@ import storeIcon from "../images/icons/store-icon.svg";
             orig.warn(...a);
           };
           console.error = (...a) => {
-            try { pushLog('error', a); } catch {}
+            try {
+              // If an Error is present, rewrite to plain-English summary
+              const err = a.find((x) => x instanceof Error) as any;
+              if (err) {
+                const summary = `Error: ${err.message}`;
+                const rest = a.filter((x) => x !== err);
+                pushLog('error', [summary, ...rest]);
+              } else {
+                pushLog('error', a);
+              }
+            } catch {}
             orig.error(...a);
           };
         } catch {}
@@ -446,6 +464,8 @@ import storeIcon from "../images/icons/store-icon.svg";
           if (typeEl) typeEl.textContent = (file.type?.split('/')[1] || file.name.split('.').pop() || 'unknown');
           if (statusEl) statusEl.textContent = 'Ready to upload';
           if (spinnerEl) spinnerEl.classList.add('hidden');
+          const storeIconEl = document.getElementById('store-icon');
+          if (storeIconEl) storeIconEl.classList.remove('hidden');
           if (checkEl) checkEl.classList.remove('hidden');
           // Do NOT switch to Step 2 yet; wait for successful transaction
           // Directly trigger WanderConnect flow now that file is ready

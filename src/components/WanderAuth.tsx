@@ -55,6 +55,9 @@ export default function WanderAuth() {
       const checkEl = document.getElementById(
         "uploaded-check"
       ) as HTMLElement | null;
+      const storeIconEl = document.getElementById(
+        "store-icon"
+      ) as HTMLElement | null;
       try {
         console.log("[Wander] flow start");
         try {
@@ -68,10 +71,35 @@ export default function WanderAuth() {
         } catch {}
         if (statusEl) statusEl.textContent = "Connecting...";
         spinnerEl?.classList.remove("hidden");
+        storeIconEl?.classList.add("hidden");
         checkEl?.classList.add("hidden");
 
         // Open auth UI and wait for wallet API
         (window as any).__wanderOpen?.();
+
+        // Subscribe to wallet events for extra visibility (if available)
+        try {
+          const wallet: any = (window as any).arweaveWallet;
+          const ev: any = wallet?.events;
+          const subscribe = ev?.subscribe?.bind(ev) || ev?.on?.bind(ev);
+          if (typeof subscribe === "function") {
+            subscribe("connect", (p: any) =>
+              console.log("[Wander] event: connect", p)
+            );
+            subscribe("disconnect", (p: any) =>
+              console.log("[Wander] event: disconnect", p)
+            );
+            subscribe("activeAddress", (p: any) =>
+              console.log("[Wander] event: activeAddress", p)
+            );
+            subscribe("permissions", (p: any) =>
+              console.log("[Wander] event: permissions", p)
+            );
+          }
+        } catch {}
+
+        // Show a helpful hint if no progress within 15s (common deploy blockers)
+        let __progress = false;
         await new Promise((resolve, reject) => {
           if ((window as any).arweaveWallet) return resolve(null);
           const handler = () => {
@@ -103,6 +131,7 @@ export default function WanderAuth() {
                     addr,
                     attempts,
                   });
+                  __progress = true;
                   return resolve(addr);
                 }
               } catch {
@@ -121,6 +150,15 @@ export default function WanderAuth() {
             };
             tick();
           });
+
+        setTimeout(() => {
+          try {
+            if (!__progress && statusEl) {
+              statusEl.textContent =
+                "Still connecting… If nothing appears, allow pop-ups, enable third‑party cookies, and approve in the wallet UI.";
+            }
+          } catch {}
+        }, 15000);
 
         if (statusEl) statusEl.textContent = "Setting up wallet...";
         await waitForActiveAddress();
@@ -265,6 +303,7 @@ export default function WanderAuth() {
         if (addrEl) addrEl.textContent = txId;
         if (statusEl) statusEl.textContent = "File Uploaded";
         spinnerEl?.classList.add("hidden");
+        storeIconEl?.classList.remove("hidden");
         checkEl?.classList.remove("hidden");
 
         // notify page that tx succeeded so it can enable Step 2
@@ -296,6 +335,7 @@ export default function WanderAuth() {
         }
         if (statusEl) statusEl.textContent = e?.message || "Upload failed";
         spinnerEl?.classList.add("hidden");
+        storeIconEl?.classList.remove("hidden");
         checkEl?.classList.add("hidden");
       }
     };
