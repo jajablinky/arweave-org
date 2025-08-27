@@ -249,7 +249,33 @@ export default function WanderAuth() {
         });
 
         const { default: Arweave } = await import("arweave");
-        const arweave = Arweave.init({});
+        // Use wallet-provided gateway config if available; fall back to arweave.net
+        let gwHost = "arweave.net";
+        let gwPort: number | undefined = 443;
+        let gwProtocol: "http" | "https" | undefined = "https";
+        try {
+          const gwCfg =
+            (await (window as any).arweaveWallet?.getArweaveConfig?.()) || {};
+          if (
+            typeof gwCfg?.host === "string" &&
+            gwCfg.host &&
+            !/vercel\.app$/i.test(gwCfg.host)
+          )
+            gwHost = gwCfg.host;
+          if (typeof gwCfg?.port === "number") gwPort = gwCfg.port;
+          if (gwCfg?.protocol === "http" || gwCfg?.protocol === "https")
+            gwProtocol = gwCfg.protocol;
+          console.log("[Wander] arweave config", {
+            host: gwHost,
+            port: gwPort,
+            protocol: gwProtocol,
+          });
+        } catch {}
+        const arweave = Arweave.init({
+          host: gwHost,
+          port: gwPort,
+          protocol: gwProtocol,
+        });
         const data = new Uint8Array(await file.arrayBuffer());
         let tx = await arweave.createTransaction({ data });
         if (file.type) {
@@ -307,7 +333,10 @@ export default function WanderAuth() {
             }
           }
         } catch (dErr) {
-          // ignore
+          console.warn(
+            "[Wander] dispatch failed, will fallback to direct upload",
+            dErr
+          );
         }
 
         if (!dispatched) {
@@ -329,7 +358,13 @@ export default function WanderAuth() {
               "[Wander] chunked upload failed; falling back to POST",
               err
             );
-            const res = await arweave.transactions.post(tx);
+            // POST to configured gateway instead of default to avoid CORS on preview subdomains
+            const res = await fetch(`${gwProtocol}://${gwHost}:${gwPort}/tx`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(tx),
+              mode: "cors",
+            }).then((r) => ({ status: r.status }));
             console.log("[Wander] POST upload status", res?.status);
             if (!res?.status || res.status < 200 || res.status >= 300) {
               throw new Error("POST upload failed");
