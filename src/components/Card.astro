@@ -1,5 +1,6 @@
 ---
 import Button from "./Button.astro";
+import { Image } from 'astro:assets';
 
 interface Props {
   title: string;
@@ -7,6 +8,7 @@ interface Props {
   href: string;
   ctaText: string;
   image?: string | null;
+  imageAsset?: any | null; // optional optimized local asset
   showMedia?: boolean; // hide the media area for text-only cards
   mediaHeightClass?: string; // control media block height (e.g., 'h-56')
   mediaBG?: string; // control placeholder color
@@ -29,6 +31,7 @@ const {
   href,
   ctaText,
   image = null,
+  imageAsset = null,
   showMedia = true,
   mediaHeightClass = 'h-56',
   mediaBG = 'bg-secondaryLight1',
@@ -44,6 +47,7 @@ const {
 
 } = Astro.props as Props;
 ---
+---
 
 <article class:list={["group border border-gray-200 overflow-hidden h-full flex flex-col", (relativeParent || typeof tag === 'string') && 'relative', className]}>
   {typeof tag === 'string' && (
@@ -53,10 +57,13 @@ const {
   )}
   {showMedia && (
     <slot name="media">
-      {image ? (
+      {imageAsset || image ? (
         <div class:list={[mediaHeightClass, mediaBG, itemsPosition, "relative overflow-hidden"]}>
-
-          <img src={image} alt={title} class:list={[imageWidthClass, position,"w-full object-cover grayscale transition-[filter,transform,opacity] opacity-80 duration-300 group-hover:grayscale-0 group-hover:scale-[1.02] group-hover:opacity-100 ease-out-circ"]} />
+          {imageAsset ? (
+            <Image src={imageAsset} alt={title} class={`${imageWidthClass} ${position} w-full object-cover grayscale transition-[filter,transform,opacity] opacity-80 duration-300 group-hover:grayscale-0 group-hover:scale-[1.02] group-hover:opacity-100 ease-out-circ`} />
+          ) : (
+            <img src={image!} alt={title} class:list={[imageWidthClass, position,"w-full object-cover grayscale transition-[filter,transform,opacity] opacity-80 duration-300 group-hover:grayscale-0 group-hover:scale-[1.02] group-hover:opacity-100 ease-out-circ"]} />
+          )}
           <div class:list={["pointer-events-none absolute inset-x-0 bottom-0 z-10", bottomOverlayHeightClass]}
           style="backdrop-filter: blur(1.5px); -webkit-backdrop-filter: blur(1.5px); background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%);"></div>
         </div>
