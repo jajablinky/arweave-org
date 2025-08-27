@@ -47,7 +47,6 @@ const {
 
 } = Astro.props as Props;
 ---
----
 
 <article class:list={["group border border-gray-200 overflow-hidden h-full flex flex-col", (relativeParent || typeof tag === 'string') && 'relative', className]}>
   {typeof tag === 'string' && (
