@@ -89,25 +89,25 @@ export default function WanderAuth() {
 
         // Subscribe to wallet events for extra visibility (if available)
         try {
-          console.log("subscribing.. flow");
           const wallet: any = (window as any).arweaveWallet;
           const ev: any = wallet?.events;
           const subscribe = ev?.subscribe?.bind(ev) || ev?.on?.bind(ev);
-          if (typeof subscribe === "function") {
-            subscribe("connect", (p: any) =>
-              console.log("[Wander] event: connect", p)
-            );
-            subscribe("disconnect", (p: any) =>
-              console.log("[Wander] event: disconnect", p)
-            );
-            subscribe("activeAddress", (p: any) =>
-              console.log("[Wander] event: activeAddress", p)
-            );
-            subscribe("permissions", (p: any) =>
-              console.log("[Wander] event: permissions", p)
-            );
-          }
-        } catch {}
+          console.log("subscribing.. flow");
+          subscribe("connect", (p: any) =>
+            console.log("[Wander] event: connect", p)
+          );
+          subscribe("disconnect", (p: any) =>
+            console.log("[Wander] event: disconnect", p)
+          );
+          subscribe("activeAddress", (p: any) =>
+            console.log("[Wander] event: activeAddress", p)
+          );
+          subscribe("permissions", (p: any) =>
+            console.log("[Wander] event: permissions", p)
+          );
+        } catch {
+          console.error("subscribing.. flow", Error);
+        }
 
         // Show a helpful hint if no progress within 15s (common deploy blockers)
         let __progress = false;
