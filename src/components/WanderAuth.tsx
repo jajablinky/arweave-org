@@ -20,18 +20,19 @@ export default function WanderAuth() {
     } catch {}
 
     // Expose opener on window for imperative usage
-    (window as any).__wanderOpen = () => {
-      console.log("[Wander] open/connect requested");
+    (window as any).__wanderOpen = async () => {
+      console.log("[Wander] connect requested");
       try {
-        if (typeof wander.open === "function") {
-          console.log("[Wander] calling wander.open()");
-          wander.open();
-        } else if (typeof wander.connect === "function") {
+        if (typeof wander.connect === "function") {
           console.log("[Wander] calling wander.connect()");
-          wander.connect();
+          await wander.connect();
+        } else if (typeof wander.open === "function") {
+          // Fallback only
+          console.log("[Wander] calling wander.open() fallback");
+          wander.open();
         }
-      } catch {
-        console.error("Open / connect", Error);
+      } catch (err) {
+        console.error("[Wander] connect/open error", err);
       }
     };
 
@@ -76,8 +77,15 @@ export default function WanderAuth() {
         storeIconEl?.classList.add("hidden");
         checkEl?.classList.add("hidden");
 
-        // Open auth UI and wait for wallet API
-        (window as any).__wanderOpen?.();
+        // Prefer direct connect over opening UI to reduce popup/cookie issues on deploy
+        try {
+          if (!(window as any).arweaveWallet && wanderRef.current?.connect) {
+            console.log("[Wander] calling wander.connect() (no wallet yet)");
+            await wanderRef.current.connect();
+          }
+        } catch (connErr) {
+          console.warn("[Wander] wander.connect failed", connErr);
+        }
 
         // Subscribe to wallet events for extra visibility (if available)
         try {
