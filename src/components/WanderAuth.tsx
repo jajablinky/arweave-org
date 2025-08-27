@@ -115,6 +115,29 @@ export default function WanderAuth() {
           }, 30000);
         });
 
+        // After load, print wallet info, permissions, and initial address (deploy visibility)
+        try {
+          const wallet: any = (window as any).arweaveWallet;
+          console.log("[Wander] wallet info", {
+            name: wallet?.walletName,
+            version: wallet?.walletVersion,
+          });
+          try {
+            const perms = (await wallet?.getPermissions?.()) || [];
+            console.log("[Wander] current permissions", perms);
+          } catch (permsErr) {
+            console.warn("[Wander] could not read permissions", permsErr);
+          }
+          try {
+            const addr0 = await wallet?.getActiveAddress?.();
+            console.log("[Wander] initial active address", {
+              addr: addr0 || null,
+            });
+          } catch (addrErr) {
+            console.warn("[Wander] initial getActiveAddress failed", addrErr);
+          }
+        } catch {}
+
         // Ensure an active address exists before requesting permissions
         const waitForActiveAddress = async (timeoutMs = 90000) =>
           new Promise<string>((resolve, reject) => {
@@ -136,6 +159,12 @@ export default function WanderAuth() {
                 }
               } catch {
                 // ignore
+              }
+              if (attempts % 5 === 0) {
+                console.log("[Wander] still waiting for active address", {
+                  attempts,
+                  waitedMs: Date.now() - start,
+                });
               }
               if (Date.now() - start > timeoutMs) {
                 console.warn("[Wander] waitForActiveAddress timeout", {
