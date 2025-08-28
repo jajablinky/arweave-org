@@ -7,9 +7,9 @@ export default function WanderAuth() {
   useEffect(() => {
     const wander = new (WanderConnect as any)({
       clientId: "FREE_TRIAL",
-      ui: { launcher: false },
+      ui: { launcher: true },
       showLauncher: false,
-      button: false,
+      button: true,
     });
     wanderRef.current = wander;
     try {
@@ -36,16 +36,28 @@ export default function WanderAuth() {
       }
     };
 
-    const handleWalletLoaded = () => {
+    const onWalletInjected = () => {
       try {
         const w = (window as any).arweaveWallet;
-        console.log("[Wander] arweaveWalletLoaded", {
+        console.log("[Wander] wallet injected", {
           hasWallet: Boolean(w),
           keys: w ? Object.keys(w) : [],
         });
       } catch {}
+      // If a file is already picked, automatically kick off the flow
+      try {
+        if (
+          (window as any).__selectedFile &&
+          !(window as any).__wanderFlowStarted
+        ) {
+          console.log("[Wander] auto-start after wallet injected");
+          setTimeout(() => (window as any).__wanderConnectAndUpload?.(), 0);
+        }
+      } catch {}
     };
-    window.addEventListener("arweaveWalletLoaded", handleWalletLoaded);
+    window.addEventListener("arweaveWalletLoaded", onWalletInjected);
+    // Some wallets emit a slightly different event name
+    window.addEventListener("arweaveWalletIsLoaded", onWalletInjected);
 
     // Full connect+permission+upload pipeline exposed for Astro to call
     (window as any).__wanderConnectAndUpload = async () => {
@@ -62,6 +74,8 @@ export default function WanderAuth() {
         "store-icon"
       ) as HTMLElement | null;
       try {
+        // Prevent duplicate starts if multiple events/buttons fire
+        (window as any).__wanderFlowStarted = true;
         console.log("[Wander] flow start");
         try {
           console.log("[Wander] env", {
@@ -97,12 +111,34 @@ export default function WanderAuth() {
             subscribe("connect", (p: any) =>
               console.log("[Wander] event: connect", p)
             );
-            subscribe("disconnect", (p: any) =>
-              console.log("[Wander] event: disconnect", p)
-            );
-            subscribe("activeAddress", (p: any) =>
-              console.log("[Wander] event: activeAddress", p)
-            );
+            subscribe("disconnect", async (p: any) => {
+              console.log("[Wander] event: disconnect", p);
+              try {
+                // If wallet disconnects, prompt user to create/select again
+                if (!(window as any).__wanderAutoOpenInProgress) {
+                  (window as any).__wanderAutoOpenInProgress = true;
+                  wanderRef.current?.open?.();
+                  setTimeout(() => {
+                    (window as any).__wanderAutoOpenInProgress = false;
+                  }, 3000);
+                }
+              } catch {}
+            });
+            subscribe("activeAddress", async (addr: any) => {
+              console.log("[Wander] event: activeAddress", addr);
+              try {
+                if (!addr) {
+                  // No active address → open UI to complete setup
+                  if (!(window as any).__wanderAutoOpenInProgress) {
+                    (window as any).__wanderAutoOpenInProgress = true;
+                    wanderRef.current?.open?.();
+                    setTimeout(() => {
+                      (window as any).__wanderAutoOpenInProgress = false;
+                    }, 3000);
+                  }
+                }
+              } catch {}
+            });
             subscribe("permissions", (p: any) =>
               console.log("[Wander] event: permissions", p)
             );
@@ -113,15 +149,22 @@ export default function WanderAuth() {
         let __progress = false;
         await new Promise((resolve, reject) => {
           if ((window as any).arweaveWallet) return resolve(null);
-          const handler = () => {
-            window.removeEventListener("arweaveWalletLoaded", handler as any);
+          const onLoad = () => {
+            cleanup();
             resolve(null);
           };
-          window.addEventListener("arweaveWalletLoaded", handler as any, {
+          const cleanup = () => {
+            window.removeEventListener("arweaveWalletLoaded", onLoad as any);
+            window.removeEventListener("arweaveWalletIsLoaded", onLoad as any);
+          };
+          window.addEventListener("arweaveWalletLoaded", onLoad as any, {
+            once: true,
+          });
+          window.addEventListener("arweaveWalletIsLoaded", onLoad as any, {
             once: true,
           });
           setTimeout(() => {
-            window.removeEventListener("arweaveWalletLoaded", handler as any);
+            cleanup();
             reject(new Error("Timeout waiting for wallet"));
           }, 30000);
         });
@@ -150,10 +193,14 @@ export default function WanderAuth() {
         } catch {}
 
         // Ensure an active address exists before requesting permissions
-        const waitForActiveAddress = async (timeoutMs = 90000) =>
+        const waitForActiveAddress = async (
+          timeoutMs = 90000,
+          autoOpenAfterMs = 5000
+        ) =>
           new Promise<string>((resolve, reject) => {
             const start = Date.now();
             let attempts = 0;
+            let opened = false;
             const tick = async () => {
               try {
                 const addr = await (
@@ -176,6 +223,14 @@ export default function WanderAuth() {
                   attempts,
                   waitedMs: Date.now() - start,
                 });
+              }
+              // Auto-open UI after a short stall to help the user complete setup
+              if (!opened && Date.now() - start > autoOpenAfterMs) {
+                opened = true;
+                try {
+                  console.log("[Wander] opening wallet UI to complete setup");
+                  wanderRef.current?.open?.();
+                } catch {}
               }
               if (Date.now() - start > timeoutMs) {
                 console.warn("[Wander] waitForActiveAddress timeout", {
@@ -227,7 +282,21 @@ export default function WanderAuth() {
 
         // Now ensure an active address exists (should succeed post-permission)
         if (statusEl) statusEl.textContent = "Setting up wallet...";
-        await waitForActiveAddress();
+        let addrOk = false;
+        try {
+          const a = await (window as any).arweaveWallet?.getActiveAddress?.();
+          addrOk = typeof a === "string" && a.length > 20;
+        } catch {}
+        if (!addrOk) {
+          // Open UI to prompt account create/select if needed
+          try {
+            console.log(
+              "[Wander] no active address after permission → opening UI"
+            );
+            wanderRef.current?.open?.();
+          } catch {}
+        }
+        await waitForActiveAddress(120000, 3000);
 
         // Close modal early so user returns to page
         // Try to close the Wander widget/panel as well
@@ -378,6 +447,10 @@ export default function WanderAuth() {
         spinnerEl?.classList.add("hidden");
         storeIconEl?.classList.remove("hidden");
         checkEl?.classList.add("hidden");
+      } finally {
+        try {
+          (window as any).__wanderFlowStarted = false;
+        } catch {}
       }
     };
 
@@ -404,7 +477,8 @@ export default function WanderAuth() {
       wanderRef.current = null;
       delete (window as any).__wanderOpen;
       delete (window as any).__wanderConnectAndUpload;
-      window.removeEventListener("arweaveWalletLoaded", handleWalletLoaded);
+      window.removeEventListener("arweaveWalletLoaded", onWalletInjected);
+      window.removeEventListener("arweaveWalletIsLoaded", onWalletInjected);
     };
   }, []);
 
