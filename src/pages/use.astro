@@ -203,22 +203,50 @@ import storeIcon from "../images/icons/store-icon.svg";
     <script>
       // @ts-nocheck
       document.addEventListener('DOMContentLoaded', () => {
-        const tabs = Array.from(document.querySelectorAll('[data-step-tab]'));
-        const panels = Array.from(document.querySelectorAll('[data-step-panel]'));
+        try {
+          console.log('[Use] DOM ready', {
+            href: window.location?.href,
+            origin: window.location?.origin,
+            ua: navigator.userAgent,
+          });
+        } catch {}
+
+        // Global error handlers (kept minimal)
+        try {
+          if (!(window).__useGlobalErrHandlers) {
+            window.addEventListener('error', (ev) => {
+              console.error('[Global] window.onerror', ev?.error || ev?.message || ev);
+            });
+            window.addEventListener('unhandledrejection', (ev) => {
+              console.error('[Global] unhandledrejection', ev?.reason || ev);
+            });
+            (window).__useGlobalErrHandlers = true;
+          }
+        } catch {}
+
+        const tabs = document.querySelectorAll('[data-step-tab]');
+        const panels = document.querySelectorAll('[data-step-panel]');
         const step2Btn = document.querySelector('[data-step-tab="2"]');
+        (window as any).__txReady = false;
 
-        (window).__txReady = false;
+        // Diagnostics removed
 
-        const setStep2Enabled = (enabled) => {
+        function setStep2Enabled(enabled) {
           if (!step2Btn) return;
-          const el = step2Btn;
-          el.classList.toggle('opacity-50', !enabled);
-          el.classList.toggle('cursor-not-allowed', !enabled);
-          el.classList.toggle('pointer-events-none', !enabled);
-          el.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-        };
+          const el = step2Btn as HTMLElement;
+          if (enabled) {
+            el.classList.remove('opacity-50','cursor-not-allowed','pointer-events-none');
+            el.setAttribute('aria-disabled','false');
+          } else {
+            el.classList.add('opacity-50','cursor-not-allowed','pointer-events-none');
+            el.setAttribute('aria-disabled','true');
+          }
+          try { console.log('[Use] setStep2Enabled', { enabled }); } catch {}
+        }
+        setStep2Enabled(false);
 
-        const setActive = (step) => {
+        function setActive(step) {
+          try { console.log('[Use] setActive', { step }); } catch {}
           tabs.forEach((t) => {
             const isActive = t.getAttribute('data-step-tab') === step;
             t.classList.toggle('border-b', isActive);
@@ -227,37 +255,58 @@ import storeIcon from "../images/icons/store-icon.svg";
           });
           panels.forEach((p) => {
             const isPanel = p.getAttribute('data-step-panel') === step;
-            p.classList.toggle('hidden', !isPanel);
-            p.classList.toggle('flex', isPanel);
-            p.classList.toggle('flex-col', isPanel);
-            p.classList.toggle('h-full', isPanel);
+            if (isPanel) {
+              p.classList.remove('hidden');
+              p.classList.add('flex', 'flex-col', 'h-full');
+            } else {
+              p.classList.add('hidden');
+              p.classList.remove('flex', 'flex-col', 'h-full');
+            }
           });
-        };
+        }
 
-        tabs.forEach((t) => {
+        tabs.forEach((t) =>
           t.addEventListener('click', (e) => {
             const targetStep = t.getAttribute('data-step-tab');
-            if (targetStep === '2' && !(window).__txReady) {
+            if (targetStep === '2' && !(window as any).__txReady) {
               e.preventDefault();
+              try { console.warn('[Use] blocked navigation to Step 2 before tx ready'); } catch {}
               return;
             }
             setActive(targetStep);
-          });
-        });
+          })
+        );
 
         // File interactions
-        const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('file-input');
+        const dz = document.getElementById('dropzone');
+        const finputEl = document.getElementById('file-input');
         const chooseBtn = document.getElementById('choose-file-btn');
         const nameEl = document.getElementById('selected-file-name');
 
-        const press = (el) => {
-          if (!el) return;
-          el.classList.add('scale-[0.99]');
-          setTimeout(() => el.classList.remove('scale-[0.99]'), 120);
-        };
 
-        const updateStep2UI = (file) => {
+
+        async function setName(file) {
+          if (!file) return;
+          const errEl = document.getElementById('selected-file-error');
+          const overLimit = file.size > 100 * 1024; // 100KB
+          console.log('[Use] File selected:', { name: file.name, size: file.size, type: file.type, overLimit });
+          if (errEl) {
+            if (overLimit) {
+              errEl.textContent = 'File must be under 100KB.';
+              errEl.classList.remove('hidden');
+            } else {
+              errEl.textContent = '';
+              errEl.classList.add('hidden');
+            }
+          }
+          (window as any).__fileOk = !overLimit;
+          if (overLimit) {
+            return; // too large; do not proceed or open modal
+          }
+          if (nameEl) nameEl.textContent = file.name;
+          // Save selected file globally for the auth/upload flow
+          (window as any).__selectedFile = file;
+          // Populate Step 2 details
           const linkEl = document.getElementById('view-link');
           const addr = document.getElementById('address-el');
           const sizeEl = document.getElementById('size-el');
@@ -265,63 +314,67 @@ import storeIcon from "../images/icons/store-icon.svg";
           const statusEl = document.getElementById('status-el');
           const spinnerEl = document.getElementById('upload-spinner');
           const checkEl = document.getElementById('uploaded-check');
-          const storeIconEl = document.getElementById('store-icon');
-          if (linkEl) linkEl.setAttribute('href', '#');
+          if (linkEl) linkEl.setAttribute('href', `#`);
           if (addr) addr.textContent = '—';
           if (sizeEl) sizeEl.textContent = `${Math.round(file.size / 1024)}kb`;
           if (typeEl) typeEl.textContent = (file.type?.split('/')[1] || file.name.split('.').pop() || 'unknown');
           if (statusEl) statusEl.textContent = 'Ready to upload';
-          spinnerEl?.classList.add('hidden');
-          storeIconEl?.classList.remove('hidden');
-          checkEl?.classList.remove('hidden');
-        };
+          if (spinnerEl) spinnerEl.classList.add('hidden');
+          const storeIconEl = document.getElementById('store-icon');
+          if (storeIconEl) storeIconEl.classList.remove('hidden');
+          if (checkEl) checkEl.classList.remove('hidden');
+          // Do NOT switch to Step 2 yet; wait for successful transaction
+          // Directly trigger WanderConnect flow now that file is ready
+          setTimeout(() => {
+            try {
+              console.log('[Use] invoking __wanderConnectAndUpload');
+            } catch {}
+            (window as any).__wanderConnectAndUpload?.();
+          }, 0);
+        }
 
-        const handleFile = (file) => {
-          if (!file) return;
-          const errEl = document.getElementById('selected-file-error');
-          const overLimit = file.size > 100 * 1024; // 100KB
-          (window).__fileOk = !overLimit;
-          if (errEl) {
-            errEl.textContent = overLimit ? 'File must be under 100KB.' : '';
-            errEl.classList.toggle('hidden', !overLimit);
-          }
-          if (overLimit) return;
-          if (nameEl) nameEl.textContent = file.name;
-          (window).__selectedFile = file;
-          updateStep2UI(file);
-          // Call immediately within the user gesture to avoid popup blocking
-          (window).__wanderConnectAndUpload?.();
-        };
-
-        if (dropzone && fileInput) {
-          dropzone.addEventListener('dragover', (e) => {
+        if (dz && finputEl) {
+          dz.addEventListener('dragover', (e) => {
             e.preventDefault();
-            dropzone.classList.add('border-orange');
+            dz.classList.add('border-orange');
           });
-          dropzone.addEventListener('dragleave', () => dropzone.classList.remove('border-orange'));
-          dropzone.addEventListener('drop', (e) => {
+          dz.addEventListener('dragleave', () => dz.classList.remove('border-orange'));
+          dz.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropzone.classList.remove('border-orange');
-            press(dropzone);
+            dz.classList.remove('border-orange');
+            // Scale down briefly then back to normal on drop
+            dz.classList.add('scale-[0.99]');
+            setTimeout(() => {
+              dz.classList.remove('scale-[0.99]');
+            }, 120);
             const file = e.dataTransfer?.files?.[0];
-            if (file) handleFile(file);
+            if (file) setName(file);
           });
-          dropzone.addEventListener('click', () => {
-            press(dropzone);
-            if (fileInput instanceof HTMLInputElement) fileInput.click();
+          dz.addEventListener('click', () => {
+            // Scale down briefly then back to normal on click
+            dz.classList.add('scale-[0.99]');
+            setTimeout(() => {
+              dz.classList.remove('scale-[0.99]');
+            }, 120);
+            if (finputEl instanceof HTMLInputElement) finputEl.click();
           });
-          chooseBtn?.addEventListener('click', () => {
-            press(dropzone);
-            if (fileInput instanceof HTMLInputElement) fileInput.click();
+          if (chooseBtn) chooseBtn.addEventListener('click', () => {
+            // Mirror the same click animation on the dropzone when using the button
+            dz?.classList.add('scale-[0.99]');
+            setTimeout(() => {
+              dz?.classList.remove('scale-[0.99]');
+            }, 120);
+            if (finputEl instanceof HTMLInputElement) finputEl.click();
           });
-          if (fileInput instanceof HTMLInputElement) {
-            fileInput.addEventListener('change', () => handleFile(fileInput.files?.[0]));
+          if (finputEl instanceof HTMLInputElement) {
+            finputEl.addEventListener('change', () => setName(finputEl.files?.[0]));
           }
         }
 
-        // Callback from WanderAuth when tx is successful
-        (window).__onTxSuccess = () => {
-          (window).__txReady = true;
+        // Callback invoked by WanderAuth when tx is successful
+        (window as any).__onTxSuccess = () => {
+          try { console.log('[Use] __onTxSuccess received'); } catch {}
+          (window as any).__txReady = true;
           setStep2Enabled(true);
           setActive('2');
         };
@@ -329,27 +382,19 @@ import storeIcon from "../images/icons/store-icon.svg";
         // Initialize to Step 1
         setActive('1');
         const step1 = document.querySelector('[data-step-panel="1"]');
-        step1?.classList.add('flex', 'flex-col', 'h-full');
-        setStep2Enabled(false);
+        if (step1) {
+          step1.classList.add('flex', 'flex-col', 'h-full');
+        }
 
-        // Wallet Download modal
+        // Wallet Download modal open/close wiring
         const dlModal = document.getElementById('wallet-download-modal');
-        const dlPanel = dlModal?.querySelector('[role="dialog"]');
+        const dlPanel = dlModal?.querySelector('[role="dialog"]') as HTMLElement | null;
         const dlBackdrop = document.getElementById('wallet-download-backdrop');
         const dlCancel = document.getElementById('wallet-download-cancel');
 
-        const closeWallets = () => {
+        function openWallets() {
           if (!dlModal || !dlPanel) return;
-          dlPanel.classList.remove('scale-100');
-          dlPanel.classList.add('scale-95');
-          dlBackdrop?.classList.remove('opacity-100');
-          dlModal.style.opacity = '0';
-          dlModal.classList.add('pointer-events-none');
-          setTimeout(() => dlModal.classList.remove('flex'), 300);
-          document.removeEventListener('keydown', onDlKeydown);
-        };
-        const openWallets = () => {
-          if (!dlModal || !dlPanel) return;
+          try { console.log('[Use] openWallets'); } catch {}
           dlModal.classList.add('flex');
           dlModal.classList.remove('pointer-events-none');
           dlModal.style.opacity = '1';
@@ -357,8 +402,19 @@ import storeIcon from "../images/icons/store-icon.svg";
           dlPanel.classList.add('scale-100');
           dlBackdrop?.classList.add('opacity-100');
           document.addEventListener('keydown', onDlKeydown);
-        };
-        const onDlKeydown = (e) => { if (e.key === 'Escape') closeWallets(); };
+        }
+        function closeWallets() {
+          if (!dlModal || !dlPanel) return;
+          try { console.log('[Use] closeWallets'); } catch {}
+          dlPanel.classList.remove('scale-100');
+          dlPanel.classList.add('scale-95');
+          dlBackdrop?.classList.remove('opacity-100');
+          dlModal.style.opacity = '0';
+          dlModal.classList.add('pointer-events-none');
+          setTimeout(() => dlModal.classList.remove('flex'), 300);
+          document.removeEventListener('keydown', onDlKeydown);
+        }
+        function onDlKeydown(e) { if (e.key === 'Escape') closeWallets(); }
 
         document.querySelectorAll('a[href="#wallets"]').forEach((a) => {
           a.addEventListener('click', (e) => { e.preventDefault(); openWallets(); });
@@ -366,6 +422,12 @@ import storeIcon from "../images/icons/store-icon.svg";
         dlBackdrop?.addEventListener('click', closeWallets);
         dlCancel?.addEventListener('click', closeWallets);
       });
+    </script>
+    <script>
+      // @ts-nocheck
+      ;(function () {
+        // No WalletModal on this page anymore; direct connect handled earlier.
+      })();
     </script>
   </section>
   <FooterAlt />
