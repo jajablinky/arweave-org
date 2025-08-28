@@ -31,7 +31,7 @@ import hyperbeamLogo from "../images/logos/hyperbeam-logo-1.svg";
       </p>
 
       <!-- Content + Right sidebar layout -->
-      <div class="mt-20 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px] gap-8 items-center">
+      <div class="mt-10 sm:mt-20 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px] gap-8 items-center">
         <!-- Main content: steps -->
         <div class="flex flex-col gap-10">
           <!-- Step 1 -->
@@ -135,7 +135,7 @@ import hyperbeamLogo from "../images/logos/hyperbeam-logo-1.svg";
       <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
         <Card
-          className="group lg:col-span-2 lg:row-span-2 min-h-[250px]"
+          className="group lg:col-span-2 lg:row-span-2 min-h-[450px]"
           showMedia={true}
           mediaHeightClass="h-0"
           mediaBG="bg-transparent"
@@ -148,7 +148,7 @@ import hyperbeamLogo from "../images/logos/hyperbeam-logo-1.svg";
           ctaVariant="secondary"
           contentJustifyBetween={true}
         >
-          <div slot="media" class="absolute right-2 bottom-2 sm:right-4 sm:bottom-4 md:-right-4 md:-bottom-4 lg:-right-8 lg:-bottom-8">
+          <div slot="media" class="absolute right-2 bottom-2 sm:right-4 sm:bottom-4 md:-right-4 md:-bottom-4 lg:-right-8 lg:-bottom-8 -z-10">
             <!-- Absolute, behind content -->
             <div class="pointer-events-none inset-0 z-0">
               <!-- Icon constellation anchored bottom-right -->
@@ -158,7 +158,7 @@ import hyperbeamLogo from "../images/logos/hyperbeam-logo-1.svg";
                   .orbit-rotate { animation: orbit-slow 90s linear infinite; transform-origin: center; }
                 </style>
                 <!-- Center book -->
-                <Image src={book} alt="Permaweb Book" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-24 sm:h-28 md:h-36 lg:h-44 w-auto" />
+                <Image src={book} alt="Permaweb Book" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-24 sm:h-28 md:h-36 lg:h-44 w-auto z-0" />
                 <!-- Circle icons (no backgrounds), rotating slowly while staying upright -->
                 <div class="absolute inset-0 orbit-rotate">
                   <i class="ph ph-code-block absolute left-1/2 -translate-x-1/2 top-0 text-xl sm:text-2xl md:text-3xl transform scale-[0.9] opacity-80 transition-[transform,opacity] duration-100 ease-out-cubic group-hover:scale-100 group-hover:opacity-100" aria-hidden="true"></i>

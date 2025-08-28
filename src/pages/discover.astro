@@ -15,11 +15,11 @@ import ScrollToTop from "../components/ScrollToTop.astro";
 
     <!-- Paragraph -->
     <p class="text-p1 lg:text-[14px] font-sans mt-3 max-w-4xl ">
-      Apps & Infrastructure built on the foundation of permanent data.
+      Apps & Infrastructure built on the foundation of permanent data. Can't see your project? <a href="https://github.com/nicolasverlhiac/arweave-list" target="_blank" rel="noopener" class="text-secondaryLight4 underline underline-offset-2 hover:no-underline">Add it here via pull request on Weavescan.</a>
     </p>
 
     <!-- Controls -->
-    <div class="mt-20 sticky top-0 z-20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-gray-200">
+    <div class="mt-10 sm:mt-20 sticky top-0 z-20 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-b border-gray-200">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-2 items-center p-2 lg:p-3">
         <div class="font-mono"><span class="text-orange font-bold" id="result-count">0</span> projects</div>
         <div class="lg:col-span-1">
@@ -200,6 +200,16 @@ import ScrollToTop from "../components/ScrollToTop.astro";
 
         function render(list) {
           countEl.textContent = String(list.length);
+          // Empty state when no projects match filters/search
+          if (!list.length) {
+            gridEl.innerHTML = `
+            <div class="col-span-1 lg:col-span-3 p-6 text-center text-[14px] text-secondaryLight4">
+              <p>No matching projects.</p>
+              <p class="mt-2">Can't see your project? <a href="https://github.com/nicolasverlhiac/arweave-list" target="_blank" rel="noopener" class="text-orange underline underline-offset-2 hover:no-underline">Add it here via pull request on Weavescan.</a>.</p>
+            </div>`;
+            if (footerEl) footerEl.classList.add('hidden');
+            return;
+          }
           gridEl.innerHTML = list.map(p => `
             <article class="group border border-gray-200 p-6 bg-white min-h-80">
               <div class="flex items-start justify-between">
