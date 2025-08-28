@@ -51,14 +51,22 @@ function subscribeWalletEvents(): void {
     const ev: any = wallet?.events;
     const subscribe = ev?.subscribe?.bind(ev) || ev?.on?.bind(ev);
     if (typeof subscribe === "function") {
-      subscribe("connect", (p: any) => log("[Wander] event: connect", p));
+      subscribe("connect", (p: any) => {
+        log("[Wander] event: connect", p);
+        try {
+          (window as any).__closeWanderWidget?.();
+        } catch {}
+      });
       subscribe("disconnect", (p: any) => log("[Wander] event: disconnect", p));
       subscribe("activeAddress", (p: any) =>
         log("[Wander] event: activeAddress", p)
       );
-      subscribe("permissions", (p: any) =>
-        log("[Wander] event: permissions", p)
-      );
+      subscribe("permissions", (p: any) => {
+        log("[Wander] event: permissions", p);
+        try {
+          (window as any).__closeWanderWidget?.();
+        } catch {}
+      });
     }
   } catch {}
 }
@@ -256,6 +264,16 @@ export default function WanderAuth() {
       }
     };
 
+    // Provide a global closer so event listeners can close the widget
+    (window as any).__closeWanderWidget = () => {
+      try {
+        wanderRef.current?.close?.();
+      } catch {}
+      try {
+        wanderRef.current?.destroy?.();
+      } catch {}
+    };
+
     const handleWalletLoaded = () => {
       try {
         const w = (window as any).arweaveWallet;
@@ -366,7 +384,7 @@ export default function WanderAuth() {
         // Close modal early so user returns to page
         // Try to close the Wander widget/panel as well
         try {
-          wanderRef.current?.close?.();
+          (window as any).__closeWanderWidget?.();
         } catch {}
         const earlyModal = document.getElementById("wallet-modal");
         if (earlyModal) {
@@ -471,8 +489,7 @@ export default function WanderAuth() {
           modal.classList.add("hidden");
         }
         try {
-          // Ensure widget is closed at the end too
-          wanderRef.current?.close?.();
+          (window as any).__closeWanderWidget?.();
         } catch {}
         console.log("[Wander] uploaded", txId);
       } catch (e: any) {
@@ -515,6 +532,7 @@ export default function WanderAuth() {
       } catch {}
       wanderRef.current = null;
       delete (window as any).__wanderOpen;
+      delete (window as any).__closeWanderWidget;
       delete (window as any).__wanderConnectAndUpload;
       window.removeEventListener("arweaveWalletLoaded", handleWalletLoaded);
     };
