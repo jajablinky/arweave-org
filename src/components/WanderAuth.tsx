@@ -318,7 +318,12 @@ export default function WanderAuth() {
         });
 
         const { default: Arweave } = await import("arweave");
-        const arweave = Arweave.init({});
+        // Explicitly use the public gateway to avoid relative-origin requests (CORS on Vercel)
+        const arweave = Arweave.init({
+          host: "arweave.net",
+          protocol: "https",
+          port: 443,
+        });
         const data = new Uint8Array(await file.arrayBuffer());
         let tx = await arweave.createTransaction({ data });
         if (file.type) {
