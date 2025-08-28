@@ -51,21 +51,36 @@ function subscribeWalletEvents(): void {
     const ev: any = wallet?.events;
     const subscribe = ev?.subscribe?.bind(ev) || ev?.on?.bind(ev);
     if (typeof subscribe === "function") {
+      const maybeResumeUpload = () => {
+        try {
+          const hasFile = Boolean(
+            (window as any).__selectedFile || (window as any).__fileOk
+          );
+          const inProgress = Boolean((window as any).__uploadInProgress);
+          const wantsResume = (window as any).__resumePending !== false;
+          if (hasFile && !inProgress && wantsResume) {
+            (window as any).__wanderConnectAndUpload?.();
+          }
+        } catch {}
+      };
       subscribe("connect", (p: any) => {
         log("[Wander] event: connect", p);
         try {
           (window as any).__closeWanderWidget?.();
         } catch {}
+        maybeResumeUpload();
       });
       subscribe("disconnect", (p: any) => log("[Wander] event: disconnect", p));
-      subscribe("activeAddress", (p: any) =>
-        log("[Wander] event: activeAddress", p)
-      );
+      subscribe("activeAddress", (p: any) => {
+        log("[Wander] event: activeAddress", p);
+        maybeResumeUpload();
+      });
       subscribe("permissions", (p: any) => {
         log("[Wander] event: permissions", p);
         try {
           (window as any).__closeWanderWidget?.();
         } catch {}
+        maybeResumeUpload();
       });
     }
   } catch {}
@@ -293,6 +308,10 @@ export default function WanderAuth() {
 
     // Full connect+permission+upload pipeline exposed for Astro to call
     (window as any).__wanderConnectAndUpload = async () => {
+      if ((window as any).__uploadInProgress) {
+        return;
+      }
+      (window as any).__uploadInProgress = true;
       const statusEl = document.getElementById(
         "status-el"
       ) as HTMLElement | null;
@@ -507,6 +526,15 @@ export default function WanderAuth() {
         spinnerEl?.classList.add("hidden");
         storeIconEl?.classList.remove("hidden");
         checkEl?.classList.add("hidden");
+        const msg = String(e?.message || e || "");
+        if (/No wallets added/i.test(msg)) {
+          (window as any).__resumePending = true;
+          if (statusEl) statusEl.textContent = "Finalizing wallet setup…";
+        } else {
+          (window as any).__resumePending = false;
+        }
+      } finally {
+        (window as any).__uploadInProgress = false;
       }
     };
 
